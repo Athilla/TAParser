@@ -3,25 +3,24 @@ using TerraAvantura.Cli.Services;
 namespace TerraAvantura.Cli.Tests;
 
 /// <summary>
-/// Verifie l'extraction des parcours depuis le JSON "drupalSettings.geocaching_map.markers"
-/// embarque dans la page /parcours (fixture HTML sauvegardee).
+/// Verifie l'extraction des parcours depuis une page /parcours (fixture HTML sauvegardee).
 /// </summary>
 public class ParcoursServiceTests
 {
     private const string BaseUrl = "https://www.terra-aventura.fr";
 
     [Fact]
-    public void ExtractParcours_ParsesOnlyGeocachingCacheMarkers()
+    public void ExtractParcours_ParsesEachArticleFromFixture()
     {
         string html = ReadFixture("parcours-listing.html");
 
         var parcours = ParcoursService.ExtractParcours(html, BaseUrl);
 
-        Assert.Equal(3, parcours.Count);
+        Assert.Equal(4, parcours.Count);
     }
 
     [Fact]
-    public void ExtractParcours_ExtractsTitleCityAndNodeBasedUrl()
+    public void ExtractParcours_ExtractsTitleCityAndUrl()
     {
         string html = ReadFixture("parcours-listing.html");
 
@@ -30,21 +29,21 @@ public class ParcoursServiceTests
 
         Assert.Equal("Le génie de la Macarine", first.Title);
         Assert.Equal("Villejoubert", first.City);
-        Assert.Equal("https://www.terra-aventura.fr/node/47", first.Url);
+        Assert.Equal("https://www.terra-aventura.fr/caches/genie-de-macarine", first.Url);
     }
 
     [Fact]
-    public void ExtractParcours_ExcludesPartnersPlacesMarkers()
+    public void ExtractParcours_TrimsLeadingSpaceInLinkHref()
     {
         string html = ReadFixture("parcours-listing.html");
 
         var parcours = ParcoursService.ExtractParcours(html, BaseUrl);
 
-        Assert.DoesNotContain(parcours, p => p.NodeId == 2820);
+        Assert.All(parcours, p => Assert.DoesNotContain(" ", p.Url));
     }
 
     [Fact]
-    public void ExtractParcours_ReturnsEmptyListWhenSettingsScriptIsMissing()
+    public void ExtractParcours_ReturnsEmptyListWhenNoArticlesPresent()
     {
         var parcours = ParcoursService.ExtractParcours("<html><body>Rien ici</body></html>", BaseUrl);
 
@@ -57,5 +56,3 @@ public class ParcoursServiceTests
         return File.ReadAllText(path);
     }
 }
-
-
