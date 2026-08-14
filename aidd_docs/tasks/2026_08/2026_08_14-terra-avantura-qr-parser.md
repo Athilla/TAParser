@@ -134,9 +134,9 @@ flowchart TD
 
 #### Acceptance criteria
 
-- [ ] `dotnet build TerraAvantura.sln` succeeds
-- [ ] Running the CLI with no site interaction logs a startup message and reads config values without error
-- [ ] Real credentials are never committed (only placeholders in `appsettings.json`, real values in a gitignored override file)
+- [x] `dotnet build TerraAvantura.sln` succeeds
+- [x] Running the CLI with no site interaction logs a startup message and reads config values without error
+- [x] Real credentials are never committed (only placeholders in `appsettings.json`, real values in a gitignored override file)
 
 ### Phase 2: Authentication
 
@@ -151,8 +151,8 @@ flowchart TD
 
 #### Acceptance criteria
 
-- [ ] A valid login against the real site returns an authenticated `HttpClient` usable for subsequent requests
-- [ ] An invalid credential attempt is detected and logged as a clear failure, process exits non-zero
+- [x] A valid login against the real site returns an authenticated `HttpClient` usable for subsequent requests
+- [x] An invalid credential attempt is detected and logged as a clear failure, process exits non-zero
 
 ### Phase 3: Parcours discovery
 
@@ -167,8 +167,8 @@ flowchart TD
 
 #### Acceptance criteria
 
-- [ ] The service returns a list close to ~600 parcours entries when run against the real site
-- [ ] Unit tests validate parsing logic against the fixture without hitting the network
+- [x] The service returns a list close to ~600 parcours entries when run against the real site
+- [x] Unit tests validate parsing logic against the fixture without hitting the network
 
 ### Phase 4: Comment scraping & QR detection
 
@@ -183,9 +183,9 @@ flowchart TD
 
 #### Acceptance criteria
 
-- [ ] A comment containing a real QR-code image is correctly decoded to its word content
-- [ ] Comments with non-QR images or no images do not produce false positives
-- [ ] Unit tests cover the three fixture cases without hitting the network
+- [x] A comment containing a real QR-code image is correctly decoded to its word content
+- [x] Comments with non-QR images or no images do not produce false positives
+- [x] Unit tests cover the three fixture cases without hitting the network
 
 ### Phase 5: Resume state management
 
@@ -200,8 +200,8 @@ flowchart TD
 
 #### Acceptance criteria
 
-- [ ] Interrupting the process mid-run and re-running skips already-processed parcours
-- [ ] A missing or corrupt `state.json` is handled gracefully (starts fresh, logs a warning)
+- [x] Interrupting the process mid-run and re-running skips already-processed parcours
+- [x] A missing or corrupt `state.json` is handled gracefully (starts fresh, logs a warning)
 
 ### Phase 6: Result writing & orchestration
 
@@ -215,9 +215,9 @@ flowchart TD
 
 #### Acceptance criteria
 
-- [ ] A found QR-code for a parcours is appended to the cumulative results file with all required fields
-- [ ] The log file records progression (parcours processed count) and any errors encountered
-- [ ] The loop always advances to the next parcours after a decode attempt (success or failure), never blocks indefinitely
+- [x] A found QR-code for a parcours is appended to the cumulative results file with all required fields
+- [x] The log file records progression (parcours processed count) and any errors encountered
+- [x] The loop always advances to the next parcours after a decode attempt (success or failure), never blocks indefinitely
 
 ### Phase 7: End-to-end validation
 
