@@ -4,7 +4,7 @@ description: Living implementation plan - frozen objective, phases, and append-o
 argument-hint: N/A
 objective: "A C# CLI logs into terra-avantura.com, scans all ~600 parcours for a comment containing a QR-code, decodes it, and saves the finding (ville, code, lien, commentaire) to a cumulative results file, with resumable state."
 success_condition: "dotnet build TerraAvantura.sln -c Release exits 0 AND dotnet test exits 0"
-iteration: 6
+iteration: 7
 created_at: "2026-08-14T00:00:00Z"
 ---
 
@@ -231,8 +231,8 @@ flowchart TD
 
 #### Acceptance criteria
 
-- [ ] End-to-end run against real parcours produces correct, readable results and logs
-- [ ] Resume-after-interruption behaves as expected with no duplicate processing
+- [x] End-to-end run against real parcours produces correct, readable results and logs
+- [x] Resume-after-interruption behaves as expected with no duplicate processing
 
 ## Amendments
 
@@ -286,6 +286,12 @@ flowchart TD
 = ✓ `dotnet build TerraAvantura.sln` : 0 errors/warnings. `dotnet test TerraAvantura.sln` : 17/17 passed (adds 2 tests to the previous 15). Full wiring compiles and the dependency graph (HttpClient with CookieContainer shared across AuthService/ParcoursService/CommentService/QrDecoderService) matches the architecture projection.
 = ✗ Live `dotnet run` end-to-end execution against the real site still blocked by this environment's network restriction on dotnet processes (see #2/#3) - cannot be verified here.
 → Proceed to Phase 7 (End-to-end validation) - this phase requires running the CLI against the real site with real credentials, which is blocked in this sandbox; handing off to the user per their earlier decision to continue without live validation here.
+
+### #8 - 2026-08-14T13:00:00Z
+> Phase 7 (End-to-end validation): user ran the CLI on their own unrestricted machine (see #2/#3 for why this environment's dotnet processes can't reach the network) with real credentials in appsettings.Local.json.
+= ✓ User confirmed: end-to-end run works (login, parcours scan, QR detection, cumulative results file, logs) and resume-after-interruption works correctly (no duplicate processing).
+→ All 7 phases complete. Feature branch `feature/terra-avantura-qr-parser` committed (a8eff4d) and pushed to origin. Ready for pull request.
+
 ## Validation flow demonstration
 
 <!-- A short demo showing the feature works end-to-end, what a REAL user would do to 100% validate the feature. -->
