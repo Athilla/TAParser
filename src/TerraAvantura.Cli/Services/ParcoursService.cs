@@ -1,17 +1,21 @@
-using System.Globalization;
+using System.Text.Json.Serialization;
 using HtmlAgilityPack;
+using System.Text.Json;
 using TerraAvantura.Cli.Models;
 
 namespace TerraAvantura.Cli.Services;
 
 /// <summary>
 /// Recupere la liste complete des parcours (ville + lien) depuis la page /parcours.
-/// Cette page expose tous les parcours en une seule reponse HTML, sans pagination.
+/// La liste visible dans le navigateur est generee cote client par JavaScript ; elle n'existe jamais
+/// dans le HTML brut. Les donnees reelles (nid, titre, ville) sont en revanche presentes des le depart,
+/// embarquees par Drupal dans le bloc "drupalSettings.geocaching_map.markers" (script JSON standard).
 /// </summary>
 public sealed class ParcoursService
 {
     private const string ParcoursListPath = "/parcours";
-    private const string ArticleSelector = "//article[contains(concat(' ', normalize-space(@class), ' '), ' gc-caches-liste ')]";
+    private const string CacheMarkerType = "geocaching_cache";
+    private const string DrupalSettingsSelector = "//script[@type='application/json' and @data-drupal-selector='drupal-settings-json']";
 
     private readonly HttpClient _httpClient;
 
@@ -30,94 +34,84 @@ public sealed class ParcoursService
     }
 
     /// <summary>
-    /// Extrait chaque parcours (article.gc-caches-liste) de la page listing.
+    /// Extrait chaque parcours a partir du JSON "drupalSettings" embarque dans la page.
     /// </summary>
     internal static IReadOnlyList<ParcoursReference> ExtractParcours(string html, string baseUrl)
     {
-        HtmlDocument document = new();
-        document.LoadHtml(html);
-
-        HtmlNodeCollection? articles = document.DocumentNode.SelectNodes(ArticleSelector);
-        if (articles is null)
+        string? settingsJson = ExtractDrupalSettingsJson(html);
+        if (settingsJson is null)
         {
             return Array.Empty<ParcoursReference>();
         }
 
-        return articles
-            .Select(article => TryExtractParcours(article, baseUrl))
+        IReadOnlyList<GeocachingMarker> markers = ParseMarkers(settingsJson);
+
+        return markers
+            .Where(marker => marker.Type == CacheMarkerType)
+            .Select(marker => ToParcoursReference(marker, baseUrl))
             .Where(parcours => parcours is not null)
             .Select(parcours => parcours!)
             .ToList();
     }
 
     /// <summary>
-    /// Extrait un seul parcours a partir de son noeud article ; retourne null si une donnee essentielle manque.
+    /// Extrait le contenu brut du script "drupal-settings-json" contenant toutes les donnees de la carte.
     /// </summary>
-    private static ParcoursReference? TryExtractParcours(HtmlNode article, string baseUrl)
+    private static string? ExtractDrupalSettingsJson(string html)
     {
-        int? nodeId = ExtractNodeId(article);
-        string title = ExtractTitle(article);
-        string city = ExtractCity(article);
-        string? relativeUrl = ExtractRelativeUrl(article);
+        HtmlDocument document = new();
+        document.LoadHtml(html);
 
-        if (nodeId is null || relativeUrl is null)
+        HtmlNode? scriptNode = document.DocumentNode.SelectSingleNode(DrupalSettingsSelector);
+        return scriptNode?.InnerHtml;
+    }
+
+    /// <summary>
+    /// Parse le JSON des reglages Drupal et retourne la liste des marqueurs de la carte (parcours + partenaires).
+    /// </summary>
+    private static IReadOnlyList<GeocachingMarker> ParseMarkers(string settingsJson)
+    {
+        DrupalSettingsRoot? settings = JsonSerializer.Deserialize<DrupalSettingsRoot>(settingsJson);
+        return (IReadOnlyList<GeocachingMarker>?)settings?.GeocachingMap?.Markers ?? Array.Empty<GeocachingMarker>();
+    }
+
+    /// <summary>
+    /// Convertit un marqueur "geocaching_cache" en reference de parcours ; ignore les entrees sans identifiant valide.
+    /// L'URL utilise /node/{id}, que Drupal redirige automatiquement vers l'alias canonique (/caches/...).
+    /// </summary>
+    private static ParcoursReference? ToParcoursReference(GeocachingMarker marker, string baseUrl)
+    {
+        if (!int.TryParse(marker.NodeId, out int nodeId))
         {
             return null;
         }
 
-        return new ParcoursReference(nodeId.Value, title, city, CombineUrl(baseUrl, relativeUrl));
-    }
-
-    /// <summary>
-    /// Extrait l'identifiant de noeud Drupal depuis la classe "js-gc-map-nid-{id}".
-    /// </summary>
-    private static int? ExtractNodeId(HtmlNode article)
-    {
-        string classAttribute = article.GetAttributeValue("class", string.Empty);
-        string? marker = classAttribute
-            .Split(' ', StringSplitOptions.RemoveEmptyEntries)
-            .FirstOrDefault(token => token.StartsWith("js-gc-map-nid-", StringComparison.Ordinal));
-
-        if (marker is null)
-        {
-            return null;
-        }
-
-        string idText = marker["js-gc-map-nid-".Length..];
-        return int.TryParse(idText, NumberStyles.Integer, CultureInfo.InvariantCulture, out int id) ? id : null;
-    }
-
-    private static string ExtractTitle(HtmlNode article)
-    {
-        HtmlNode? titleNode = article.SelectSingleNode(".//span[contains(@class, 'gc-caches-liste-title')]");
-        return HtmlEntity.DeEntitize(titleNode?.InnerText.Trim() ?? string.Empty);
-    }
-
-    private static string ExtractCity(HtmlNode article)
-    {
-        HtmlNode? cityNode = article.SelectSingleNode(".//div[contains(@class, 'field--name-field-city-postal')]//div[contains(@class, 'field__item')]");
-        string rawText = HtmlEntity.DeEntitize(cityNode?.InnerText ?? string.Empty);
-        return CleanCityText(rawText);
-    }
-
-    /// <summary>
-    /// Nettoie le texte brut "Villejoubert\n(16)" pour ne garder que le nom de ville.
-    /// </summary>
-    private static string CleanCityText(string rawText)
-    {
-        string firstLine = rawText.Split('\n', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries).FirstOrDefault() ?? string.Empty;
-        return firstLine.Trim();
-    }
-
-    private static string? ExtractRelativeUrl(HtmlNode article)
-    {
-        HtmlNode? linkNode = article.SelectSingleNode(".//a[contains(@class, 'gc-caches-liste-link')]");
-        string? href = linkNode?.GetAttributeValue("href", string.Empty);
-        return href?.Trim();
+        return new ParcoursReference(nodeId, marker.Title, marker.City ?? string.Empty, CombineUrl(baseUrl, $"/node/{nodeId}"));
     }
 
     private static string CombineUrl(string baseUrl, string relativePath)
     {
         return $"{baseUrl.TrimEnd('/')}/{relativePath.TrimStart('/')}";
     }
+
+    /// <summary>
+    /// Racine minimale du JSON "drupalSettings" : seul le bloc "geocaching_map" nous interesse.
+    /// </summary>
+    private sealed record DrupalSettingsRoot(
+        [property: JsonPropertyName("geocaching_map")] GeocachingMapSettings? GeocachingMap);
+
+    /// <summary>
+    /// Bloc "geocaching_map" : contient la liste des marqueurs affiches sur la carte des parcours.
+    /// </summary>
+    private sealed record GeocachingMapSettings(
+        [property: JsonPropertyName("markers")] List<GeocachingMarker>? Markers);
+
+    /// <summary>
+    /// Un marqueur de la carte : soit un parcours ("geocaching_cache"), soit un lieu partenaire ("partners_places").
+    /// </summary>
+    private sealed record GeocachingMarker(
+        [property: JsonPropertyName("nid")] string NodeId,
+        [property: JsonPropertyName("title")] string Title,
+        [property: JsonPropertyName("type")] string Type,
+        [property: JsonPropertyName("field_city")] string? City);
 }
